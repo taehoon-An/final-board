@@ -37,8 +37,8 @@ jobs:
         run: echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       - name: Build frontend and backend
         run: |
-          docker build -t "$IMAGE_BASE-backend:$IMAGE_TAG" backend
-          docker build -t "$IMAGE_BASE-frontend:$IMAGE_TAG" frontend
+          docker build --provenance=false --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" -t "$IMAGE_BASE-backend:$IMAGE_TAG" backend
+          docker build --provenance=false --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" -t "$IMAGE_BASE-frontend:$IMAGE_TAG" frontend
       - name: Test containers with PostgreSQL
         run: |
           docker network create board-test
