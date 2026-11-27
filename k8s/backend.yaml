@@ -20,8 +20,6 @@ spec:
     metadata:
       labels: {app: board-backend}
     spec:
-      imagePullSecrets:
-        - name: board-registry
       nodeSelector:
         kubernetes.io/hostname: myserver2
       initContainers:
