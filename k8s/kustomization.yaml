@@ -9,7 +9,7 @@ resources:
 images:
   - name: board-backend-image
     newName: ghcr.io/taehoon-an/final-board-backend
-    newTag: bootstrap
+    newTag: "3280ce60830827cbba457d843f53ea45ff950ba7"
   - name: board-frontend-image
     newName: ghcr.io/taehoon-an/final-board-frontend
-    newTag: bootstrap
+    newTag: "3280ce60830827cbba457d843f53ea45ff950ba7"
