@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: board
+resources:
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+images:
+  - name: board-backend-image
+    newName: ghcr.io/taehoon-an/final-board-backend
+    newTag: bootstrap
+  - name: board-frontend-image
+    newName: ghcr.io/taehoon-an/final-board-frontend
+    newTag: bootstrap

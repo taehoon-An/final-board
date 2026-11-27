@@ -1,0 +1,85 @@
+name: Board CI and GitOps
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/build.yml'
+      - 'scripts/smoke.py'
+  workflow_dispatch:
+permissions:
+  contents: write
+  packages: write
+concurrency:
+  group: board-main
+  cancel-in-progress: false
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test board CRUD
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          python -m unittest -v
+      - name: Prepare image names
+        run: |
+          echo "IMAGE_BASE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+      - name: Login to GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Build frontend and backend
+        run: |
+          docker build -t "$IMAGE_BASE-backend:$IMAGE_TAG" backend
+          docker build -t "$IMAGE_BASE-frontend:$IMAGE_TAG" frontend
+      - name: Test containers with PostgreSQL
+        run: |
+          docker network create board-test
+          docker run -d --name board-db --network board-test -e POSTGRES_DB=board -e POSTGRES_USER=board -e POSTGRES_PASSWORD=ci-only-password postgres:16-alpine
+          for attempt in $(seq 1 30); do
+            if docker exec board-db pg_isready -U board -d board; then break; fi
+            sleep 2
+          done
+          docker run --rm --network board-test -e DATABASE_URL=postgresql+psycopg2://board:ci-only-password@board-db:5432/board "$IMAGE_BASE-backend:$IMAGE_TAG" flask --app 'app:create_app()' init-db
+          docker run -d --name board-backend --network board-test -e DATABASE_URL=postgresql+psycopg2://board:ci-only-password@board-db:5432/board "$IMAGE_BASE-backend:$IMAGE_TAG"
+          docker run -d --name board-frontend --network board-test -p 8001:80 "$IMAGE_BASE-frontend:$IMAGE_TAG"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8001/api/health; then break; fi
+            sleep 2
+          done
+          python scripts/smoke.py http://127.0.0.1:8001
+      - name: Publish images
+        run: |
+          docker push "$IMAGE_BASE-backend:$IMAGE_TAG"
+          docker push "$IMAGE_BASE-frontend:$IMAGE_TAG"
+      - name: Update deployment image tags
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path('k8s/kustomization.yaml')
+          lines = p.read_text().splitlines()
+          kind = None
+          for i, line in enumerate(lines):
+              if 'name: board-backend-image' in line: kind = 'backend'
+              if 'name: board-frontend-image' in line: kind = 'frontend'
+              if line.strip().startswith('newName:'):
+                  lines[i] = '    newName: ' + os.environ['IMAGE_BASE'] + '-' + kind
+              if line.strip().startswith('newTag:'):
+                  lines[i] = '    newTag: "' + os.environ['IMAGE_TAG'] + '"'
+          p.write_text('\n'.join(lines) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add k8s/kustomization.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "Deploy board ${IMAGE_TAG}"
+          git pull --rebase origin main
+          git push origin HEAD:main
