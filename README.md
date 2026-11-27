@@ -25,7 +25,7 @@ PostgreSQL 영구 저장, GitHub Actions 이미지 빌드 및 GitOps 배포 구�
 
 1. 저장소 이름은 예시 `taehoon-An/final-board`. 실제 이름이 다르면 argocd/application.yaml의 repoURL을 수정합니다.
 2. main에 push하면 Actions가 테스트 후 GHCR에 frontend/backend 이미지를 올립니다.
-3. GHCR 두 패키지는 익명 pull이 가능하도록 공개하거나, 클러스터에 적절한 읽기용 imagePullSecret을 설정해야 합니다. 토큰을 저장소에 넣지 마세요.
+3. GHCR 이미지는 board-registry imagePullSecret으로 읽습니다. GitHub 인증이 만료되거나 권한이 철회되면 해당 Secret도 갱신해야 합니다. 토큰을 저장소에 넣지 마세요.
 4. server01에서 `bash scripts/bootstrap.sh`로 namespace와 DB Secret을 생성합니다. 기존 Secret은 덮어쓰지 않습니다.
 5. Actions 성공 및 k8s/kustomization.yaml의 bootstrap 태그가 실제 커밋 태그로 변경됐는지 확인합니다.
 6. `kubectl apply -f argocd/application.yaml`을 실행합니다.
